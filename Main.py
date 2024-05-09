@@ -42,7 +42,7 @@ change_to_current_directory()
 current_directory = os.getcwd()
 print("Thư mục làm việc hiện tại:", current_directory)
 
-with open("URLVideos.txt", "r") as file:
+with open("URL.txt", "r") as file:
     url_list = file.readlines()
 
 for url in url_list:
