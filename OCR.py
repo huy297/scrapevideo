@@ -1,8 +1,7 @@
 import cv2
 import pytesseract
 import re
-
-pattern = r'\b[AĂÂÁẮẤÀẰẦẢẲẨÃẴẪẠẶẬĐEÊÉẾÈỀẺỂẼỄẸỆIÍÌỈĨỊOÔƠÓỐỚÒỒỜỎỔỞÕỖỠỌỘỢUƯÚỨÙỪỦỬŨỮỤỰYÝỲỶỸỴ]+\b'
+import openpose
 
 def ChangeText (text):
     lines = text.splitlines() 
@@ -53,7 +52,20 @@ def TextOfFrame (frame):
     text = ChangeText(text)
     return text
 
-
+def FindLastFrame (frames,id,totalFrame):
+    originFrame = frames[id]
+    text = TextOfFrame(originFrame)
+    l = id
+    r = min(totalFrame-1,l + 600)
+    res = l
+    while (l <= r):
+        mid = int((r+l) / 2)
+        if (Valid_Group(text,TextOfFrame(frames[mid])) == True):
+            res = mid
+            l = mid + 1
+        else:
+            r = mid - 1
+    return res
 
 def ProcessVideo(video_path):
     cap = cv2.VideoCapture(video_path)
@@ -77,7 +89,7 @@ def ProcessVideo(video_path):
             break
         frames.append(frame)
         totalFrame += 1
-        if (totalFrame > 1000):
+        if (totalFrame > 4000):
             break
 
     currentFrame = -1
@@ -85,6 +97,7 @@ def ProcessVideo(video_path):
 
     subFrame = []
     lastFrame = 0
+    """
     for _ in range (totalFrame):
         if (_ < 200):
             continue
@@ -108,6 +121,19 @@ def ProcessVideo(video_path):
                 print("new sub")
             
         WriteVideo.write(frame)
+        """
+    currentFrame = 0
+    while (currentFrame < totalFrame):
+        numberOfVideo += 1
+        WriteVideo = cv2.VideoWriter(r"C:\Scrape\subvideo_{}.mp4".format(numberOfVideo),cv2.VideoWriter_fourcc(*'mp4v'),fps,(frame_width,frame_height))
+        lastFrame = FindLastFrame(frames,currentFrame,totalFrame)
+        subFrame.append([currentFrame,lastFrame,TextOfFrame(frames[currentFrame])])
+        print(currentFrame,lastFrame,TextOfFrame(frames[currentFrame]))
+        for id in range (currentFrame,lastFrame+1):
+            WriteVideo.write(frames[id])
+        currentFrame = lastFrame + 1
+        WriteVideo.release()
+        
     for sub in subFrame:
         print(sub)
  
