@@ -1,11 +1,11 @@
 import cv2
 import pytesseract
-import re
+import os
 import numpy as np
 from collections import Counter
 from HumanBox import DetectPeople
 
-special_chars = "=-_¿°<«“ƒ:¿+'"
+special_chars = "=-_¿°<«“ƒ¿+'"
 
 def ChangeText (text):
     lines = text.splitlines() 
@@ -43,42 +43,60 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 tessdata_dir_config = '--tessdata-dir "C:\\Program Files\\Tesseract-OCR\\tessdata"'
 
 
-
-def TextOfFrame (frame,Num=0):
-    height, width = frame.shape[:2]
+def TextOfFrame (frame,Color=-1):
     height, width = frame.shape[:2]
 
     roi_height = int(0.2 * height)
-    roi_width = int(0.4 * width)
 
     roi = frame[height - roi_height:, :]
     gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    _, binary_image = cv2.threshold(gray_roi, 200, 255, cv2.THRESH_BINARY)
-    #cv2.imwrite(r"C:\Scrape\wtf_{}.jpg".format(Num),binary_image)   
-    text = pytesseract.image_to_string(binary_image, lang='vie', config=tessdata_dir_config)
-    text = ChangeText(text)
-    return text
+    if (Color != -1):
+        _, binary_image = cv2.threshold(gray_roi, Color, 255, cv2.THRESH_BINARY)
+        text = pytesseract.image_to_string(binary_image, lang='vie', config=tessdata_dir_config)
+        text = ChangeText(text)
+        return text
+    
+    _, binary_image_black_text = cv2.threshold(gray_roi, 20, 255, cv2.THRESH_BINARY)
+    _, binary_image_white_text = cv2.threshold(gray_roi, 200, 255, cv2.THRESH_BINARY)
+    """
+    if (Path != "."):
+        cv2.imwrite(os.path.join(Path, "{}.png".format(Num)),binary_image_black_text)   
+        cv2.imwrite(os.path.join(Path, "dak_{}.png".format(Num)),roi)   
+    """
 
-def FindLastFrame (frames,id,totalFrame):
+    text_black = pytesseract.image_to_string(binary_image_black_text, lang='vie', config=tessdata_dir_config)
+    text_black = ChangeText(text_black)
+
+    text_white = pytesseract.image_to_string(binary_image_white_text, lang='vie', config=tessdata_dir_config)
+    text_white = ChangeText(text_white)
+
+    if (len(text_black) > len(text_white)):
+        Color = 20
+        return text_black,Color
+    else:
+        Color = 200
+        return text_white,Color
+
+def FindLastFrame (frames,id,totalFrame,ColorOfFrame):
     originFrame = frames[id]
-    text = TextOfFrame(originFrame)
+    text = TextOfFrame(originFrame,ColorOfFrame)
     l = id
     r = min(totalFrame-1,l + 600)
     res = l
     while (l <= r):
         mid = int((r+l) / 2)
-        if (Valid_Group(text,TextOfFrame(frames[mid])) == True):
+        if (Valid_Group(text,TextOfFrame(frames[mid],ColorOfFrame)) == True):
             res = mid
             l = mid + 1
         else:
             r = mid - 1
     return res
 
-def FindValidText(frames,From,To):
+def FindValidText(frames,From,To,ColorOfText):
     len = (To-From)//10
     strings = []
     for id in range(From,To):
-        strings.append(TextOfFrame(frames[id]))
+        strings.append(TextOfFrame(frames[id],ColorOfText))
         id += len
     string_counter = Counter(strings)
     res = string_counter.most_common(1)
@@ -116,7 +134,7 @@ def CutHumanBox(frames,From,To,n,m):
     """
     print("check")
     for u in People:
-        print(u, " thonk")
+        print(u, " people")
     """
     totalChange = [0]*len(People)
     maxRect = []
@@ -130,7 +148,7 @@ def CutHumanBox(frames,From,To,n,m):
         """
         print("Continue check")
         for u in NewPeople:
-            print(u, " why")
+            print(u, " new people")
         """
         for _ in range (min(len(People),len(NewPeople))):
             totalChange[_] += ChangeRectangle(People[_],NewPeople[_])
@@ -148,10 +166,16 @@ def CutHumanBox(frames,From,To,n,m):
     Rect[3] = min(m,Rect[3])
     return maxRect[res]
 
+def ChangeFrameToTime(id,fps):
+    seconds = int(id/fps)
+    minutes = seconds // 60
+    remaining_seconds = seconds % 60
+    return [minutes,remaining_seconds]
 
 
-
-def ProcessVideo(video_path):
+def ProcessVideo(video_path,save_path):
+    print(video_path)
+    print(save_path)
     cap = cv2.VideoCapture(video_path)
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -160,7 +184,7 @@ def ProcessVideo(video_path):
     fps = cap.get(cv2.CAP_PROP_FPS)
     print(fps)
 
-    output_text_file = open(r"C:\Scrape\sub.txt", "w", encoding="utf-8")
+    output_text_file = open(os.path.join(save_path, "subtitle.txt"), "w", encoding="utf-8")
     numberOfVideo = 1
 
     frames = []
@@ -172,8 +196,6 @@ def ProcessVideo(video_path):
             break
         frames.append(frame)
         totalFrame += 1
-        if (totalFrame > 4000):
-            break
 
     currentFrame = -1
     last_text = ''
@@ -182,20 +204,34 @@ def ProcessVideo(video_path):
     lastFrame = 0
     currentFrame = 0
     while (currentFrame < totalFrame):
-        lastFrame = FindLastFrame(frames,currentFrame,totalFrame)
-        text = TextOfFrame(frames[currentFrame],currentFrame)
+        ColorOfText = -1
+        text,ColorOfText = TextOfFrame(frames[currentFrame],ColorOfText)
+        lastFrame = FindLastFrame(frames,currentFrame,totalFrame,ColorOfText)
         if (len(text) < 6):
             currentFrame = lastFrame+1
             continue
-        print(currentFrame,lastFrame,text)
+        print(currentFrame,lastFrame,ColorOfText,text)
         subFrame.append([currentFrame,lastFrame,TextOfFrame(frames[currentFrame])])
-        print(currentFrame,lastFrame,FindValidText(frames,currentFrame,lastFrame))
+
+
         [startX,startY,endX,endY] = CutHumanBox(frames,currentFrame,lastFrame,frame_width,frame_height)
-        print(startX,startY,endX,endY)
+        # print(startX,startY,endX,endY)
         if (endX-startX == 0 and endY-startY == 0):
                 currentFrame = lastFrame + 1
                 continue
-        WriteVideo = cv2.VideoWriter(r"C:\Scrape\subvideo_{}.mp4".format(numberOfVideo),cv2.VideoWriter_fourcc(*'mp4v'),fps,(endX-startX,endY-startY))
+        
+        output_text_file.write("Scene {}:\n".format(numberOfVideo))
+        output_text_file.write("From frame: {} to {}\n".format(currentFrame,lastFrame))
+        u = ChangeFrameToTime(currentFrame,fps)
+        output_text_file.write("Start Time: {}:{}\n".format(u[0], u[1]))
+        u = ChangeFrameToTime(lastFrame,fps)
+        output_text_file.write("End Time: {}:{}\n".format(u[0], u[1]))
+        text = FindValidText(frames,currentFrame,lastFrame,ColorOfText)
+        output_text_file.write(text+"\n\n")
+
+        print(currentFrame,lastFrame,text)
+
+        WriteVideo = cv2.VideoWriter(os.path.join(save_path,"scene_{}.mp4".format(numberOfVideo)),cv2.VideoWriter_fourcc(*'mp4v'),fps,(endX-startX,endY-startY))
         # WriteVideo = cv2.VideoWriter(r"C:\Scrape\subvideo_{}.mp4".format(numberOfVideo),cv2.VideoWriter_fourcc(*'mp4v'),fps,(frame_width,frame_height))
         # print(endX-startX,endY-startY,frame_width,frame_height," thong")
         for id in range (currentFrame,lastFrame+1):
@@ -205,11 +241,22 @@ def ProcessVideo(video_path):
         currentFrame = lastFrame + 1 
         WriteVideo.release()
         numberOfVideo += 1
-        
+    output_text_file.close()
+    """
     for sub in subFrame:
         print(sub)
+    """
+
+def Main(NumberVideo,path):
+    for CountVideo in range (1,NumberVideo+1):
+        if (CountVideo != 4):
+            continue
+        subDirectory = os.path.join(path,"SubVideo_{}".format(CountVideo))
+        if (os.path.exists(subDirectory) == False):
+            os.mkdir(subDirectory)
+        video_path = os.path.join(path,"Video_{}.mp4".format(CountVideo))
+        ProcessVideo(video_path,subDirectory)
  
-print("hello")
-video_path = r"C:\Scrape\TwoMan.mp4"
-ProcessVideo(video_path)
+path = r"C:\Scrape"
+Main(4,path)
 
