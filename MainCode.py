@@ -42,61 +42,79 @@ def Valid_Group(str1,str2):
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe" 
 tessdata_dir_config = '--tessdata-dir "C:\\Program Files\\Tesseract-OCR\\tessdata"'
 
+# List Rect(x,y,u,v)
 
-def TextOfFrame (frame,Color=-1):
+ListArea = [[0,0.8,1,1],[0.6,0.4,1,1],[0,0.4,0.4,1]]
+ListColor = [20,200]
+
+def FindSubPos(frame):
     height, width = frame.shape[:2]
-
-    roi_height = int(0.2 * height)
-
-    roi = frame[height - roi_height:, :]
-    gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    if (Color != -1):
+    res = "" 
+    Col = 20
+    Area = [0,0.8,1,1]
+    # Prior
+    for Color in ListColor:
+        [x, y, u, v] = [int(ListArea[0][0] * width), int(ListArea[0][1] * height), int(ListArea[0][2] * width), int(ListArea[0][3] * height)]
+        roi = frame[y:v,x:u]
+        # cv2.imshow("pos",roi)
+        # cv2.waitKey(0)
+        gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
         _, binary_image = cv2.threshold(gray_roi, Color, 255, cv2.THRESH_BINARY)
         text = pytesseract.image_to_string(binary_image, lang='vie', config=tessdata_dir_config)
         text = ChangeText(text)
-        return text
+        if (len(res) < len(text)):
+            res = text
+            Col = Color
+    if (len(res) > 5):
+        return res,ListArea[0],Col
+    #
+    for AreaIndex in range (1,3):
+        for Color in ListColor:
+            [x, y, u, v] = [int(ListArea[AreaIndex][0] * width), int(ListArea[AreaIndex][1] * height), int(ListArea[AreaIndex][2] * width), int(ListArea[AreaIndex][3] * height)]
+            roi = frame[y:v,x:u]
+            gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            _, binary_image = cv2.threshold(gray_roi, Color, 255, cv2.THRESH_BINARY)
+            text = pytesseract.image_to_string(binary_image, lang='vie', config=tessdata_dir_config)
+            text = ChangeText(text)
+            if (len(res) < len(text)):
+                res = text
+                Col = Color
+                Area = ListArea[AreaIndex]
+    return res,Area,Col
+
+
+def TextOfFrame (frame,Area,Color):
+    height, width = frame.shape[:2]
+
+    [x, y, u, v] = [int(Area[0] * width), int(Area[1] * height), int(Area[2] * width), int(Area[3] * height)]
+    roi = frame[y:v,x:u]
+    gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    _, binary_image = cv2.threshold(gray_roi, Color, 255, cv2.THRESH_BINARY)
+    text = pytesseract.image_to_string(binary_image, lang='vie', config=tessdata_dir_config)
+    text = ChangeText(text)
+    return text
     
-    _, binary_image_black_text = cv2.threshold(gray_roi, 20, 255, cv2.THRESH_BINARY)
-    _, binary_image_white_text = cv2.threshold(gray_roi, 200, 255, cv2.THRESH_BINARY)
-    """
-    if (Path != "."):
-        cv2.imwrite(os.path.join(Path, "{}.png".format(Num)),binary_image_black_text)   
-        cv2.imwrite(os.path.join(Path, "dak_{}.png".format(Num)),roi)   
-    """
 
-    text_black = pytesseract.image_to_string(binary_image_black_text, lang='vie', config=tessdata_dir_config)
-    text_black = ChangeText(text_black)
-
-    text_white = pytesseract.image_to_string(binary_image_white_text, lang='vie', config=tessdata_dir_config)
-    text_white = ChangeText(text_white)
-
-    if (len(text_black) > len(text_white)):
-        Color = 20
-        return text_black,Color
-    else:
-        Color = 200
-        return text_white,Color
-
-def FindLastFrame (frames,id,totalFrame,ColorOfFrame):
+def FindLastFrame (frames,id,totalFrame,Area,ColorOfFrame):
     originFrame = frames[id]
-    text = TextOfFrame(originFrame,ColorOfFrame)
+    text = TextOfFrame(originFrame,Area,ColorOfFrame)
     l = id
     r = min(totalFrame-1,l + 600)
     res = l
     while (l <= r):
         mid = int((r+l) / 2)
-        if (Valid_Group(text,TextOfFrame(frames[mid],ColorOfFrame)) == True):
+        if (Valid_Group(text,TextOfFrame(frames[mid],Area,ColorOfFrame)) == True):
             res = mid
             l = mid + 1
         else:
             r = mid - 1
     return res
 
-def FindValidText(frames,From,To,ColorOfText):
+def FindValidText(frames,From,To,Area,ColorOfText):
     len = (To-From)//10
     strings = []
     for id in range(From,To):
-        strings.append(TextOfFrame(frames[id],ColorOfText))
+        strings.append(TextOfFrame(frames[id],Area,ColorOfText))
         id += len
     string_counter = Counter(strings)
     res = string_counter.most_common(1)
@@ -196,22 +214,24 @@ def ProcessVideo(video_path,save_path):
             break
         frames.append(frame)
         totalFrame += 1
+        if (totalFrame > 4000):
+            break
 
     currentFrame = -1
     last_text = ''
 
-    subFrame = []
     lastFrame = 0
     currentFrame = 0
     while (currentFrame < totalFrame):
         ColorOfText = -1
-        text,ColorOfText = TextOfFrame(frames[currentFrame],ColorOfText)
-        lastFrame = FindLastFrame(frames,currentFrame,totalFrame,ColorOfText)
+        text,AreaOfText,ColorOfText = FindSubPos(frames[currentFrame])
+        print(AreaOfText)
+        lastFrame = FindLastFrame(frames,currentFrame,totalFrame,AreaOfText,ColorOfText)
+        print(currentFrame,lastFrame)
         if (len(text) < 6):
             currentFrame = lastFrame+1
             continue
         print(currentFrame,lastFrame,ColorOfText,text)
-        subFrame.append([currentFrame,lastFrame,TextOfFrame(frames[currentFrame])])
 
 
         [startX,startY,endX,endY] = CutHumanBox(frames,currentFrame,lastFrame,frame_width,frame_height)
@@ -226,7 +246,10 @@ def ProcessVideo(video_path,save_path):
         output_text_file.write("Start Time: {}:{}\n".format(u[0], u[1]))
         u = ChangeFrameToTime(lastFrame,fps)
         output_text_file.write("End Time: {}:{}\n".format(u[0], u[1]))
-        text = FindValidText(frames,currentFrame,lastFrame,ColorOfText)
+        text = FindValidText(frames,currentFrame,lastFrame,AreaOfText,ColorOfText)
+        if (text == None):
+            text = "None"
+        #print(text)
         output_text_file.write(text+"\n\n")
 
         print(currentFrame,lastFrame,text)
