@@ -5,7 +5,17 @@ import numpy as np
 from collections import Counter
 from HumanBox import DetectPeople
 
-special_chars = "=-_¿°<«“ƒ¿+'"
+special_chars = "=-_¿°<«“ƒ¿+'Ö`›'®()>//\0123456789¬"
+
+def Len(s):
+    # Define the punctuation marks to be removed
+    punctuation_marks = ".,:; "
+    
+    # Remove punctuation marks from the string
+    filtered_string = ''.join(char for char in s if char not in punctuation_marks)
+    
+    # Return the length of the filtered string
+    return len(filtered_string)
 
 def ChangeText (text):
     lines = text.splitlines() 
@@ -44,8 +54,8 @@ tessdata_dir_config = '--tessdata-dir "C:\\Program Files\\Tesseract-OCR\\tessdat
 
 # List Rect(x,y,u,v)
 
-ListArea = [[0,0.8,1,1],[0.6,0.4,1,1],[0,0.4,0.4,1]]
-ListColor = [20,200]
+ListArea = [[0,0.8,1,1],[0.55,0.6,1,0.85],[0,0.4,0.4,1]]
+ListColor = [20,160,200]
 
 def FindSubPos(frame):
     height, width = frame.shape[:2]
@@ -62,10 +72,10 @@ def FindSubPos(frame):
         _, binary_image = cv2.threshold(gray_roi, Color, 255, cv2.THRESH_BINARY)
         text = pytesseract.image_to_string(binary_image, lang='vie', config=tessdata_dir_config)
         text = ChangeText(text)
-        if (len(res) < len(text)):
+        if (Len(res) < Len(text)):
             res = text
             Col = Color
-    if (len(res) > 5):
+    if (Len(res) > 5):
         return res,ListArea[0],Col
     #
     for AreaIndex in range (1,3):
@@ -76,7 +86,7 @@ def FindSubPos(frame):
             _, binary_image = cv2.threshold(gray_roi, Color, 255, cv2.THRESH_BINARY)
             text = pytesseract.image_to_string(binary_image, lang='vie', config=tessdata_dir_config)
             text = ChangeText(text)
-            if (len(res) < len(text)):
+            if (Len(res) < Len(text)):
                 res = text
                 Col = Color
                 Area = ListArea[AreaIndex]
@@ -101,13 +111,25 @@ def FindLastFrame (frames,id,totalFrame,Area,ColorOfFrame):
     l = id
     r = min(totalFrame-1,l + 600)
     res = l
-    while (l <= r):
-        mid = int((r+l) / 2)
-        if (Valid_Group(text,TextOfFrame(frames[mid],Area,ColorOfFrame)) == True):
-            res = mid
-            l = mid + 1
-        else:
-            r = mid - 1
+    x = Len(text)
+    if (x <= 2):
+        while (l <= r):
+            mid = int((r+l) / 2)
+            dak,Area,Col = FindSubPos(frames[mid])
+            if (Valid_Group(text,dak) == True):
+                res = mid
+                l = mid + 1
+            else:
+                r = mid - 1
+    else:
+        while (l <= r):
+            mid = int((r+l) / 2)
+            dak = TextOfFrame(frames[mid],Area,ColorOfFrame)
+            if (Valid_Group(text,dak) == True):
+                res = mid
+                l = mid + 1
+            else:
+                r = mid - 1
     return res
 
 def FindValidText(frames,From,To,Area,ColorOfText):
@@ -216,7 +238,7 @@ def ProcessVideo(video_path,save_path):
         totalFrame += 1
         if (totalFrame > 4000):
             break
-
+    print ("dcmm")
     currentFrame = -1
     last_text = ''
 
@@ -225,21 +247,35 @@ def ProcessVideo(video_path,save_path):
     while (currentFrame < totalFrame):
         ColorOfText = -1
         text,AreaOfText,ColorOfText = FindSubPos(frames[currentFrame])
-        print(AreaOfText)
+        
+
+        print(text,ColorOfText,AreaOfText)
+        '''
+        height, width = frames[currentFrame].shape[:2]
+        [x, y, u, v] = [int(AreaOfText[0] * width), int(AreaOfText[1] * height), int(AreaOfText[2] * width), int(AreaOfText[3] * height)]
+        roi = frames[currentFrame][y:v,x:u]
+        gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        _, binary_image = cv2.threshold(gray_roi, ColorOfText, 255, cv2.THRESH_BINARY)
+        text = pytesseract.image_to_string(binary_image, lang='vie', config=tessdata_dir_config)
+        print("ta heo",text)
+        cv2.imwrite(os.path.join(save_path, "frames_{}.jpg".format(currentFrame)), binary_image)
+        '''
         lastFrame = FindLastFrame(frames,currentFrame,totalFrame,AreaOfText,ColorOfText)
+        print("Last Frame: ", lastFrame)
         print(currentFrame,lastFrame)
-        if (len(text) < 6):
+        if (len(text) < 3):
             currentFrame = lastFrame+1
             continue
         print(currentFrame,lastFrame,ColorOfText,text)
 
-
+        if (lastFrame - currentFrame <= 80):
+            currentFrame = lastFrame+1
+            continue
         [startX,startY,endX,endY] = CutHumanBox(frames,currentFrame,lastFrame,frame_width,frame_height)
         # print(startX,startY,endX,endY)
         if (endX-startX == 0 and endY-startY == 0):
                 currentFrame = lastFrame + 1
                 continue
-        
         output_text_file.write("Scene {}:\n".format(numberOfVideo))
         output_text_file.write("From frame: {} to {}\n".format(currentFrame,lastFrame))
         u = ChangeFrameToTime(currentFrame,fps)
