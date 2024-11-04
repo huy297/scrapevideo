@@ -257,7 +257,6 @@ def ProcessVideo(video_path,save_path):
         gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
         _, binary_image = cv2.threshold(gray_roi, ColorOfText, 255, cv2.THRESH_BINARY)
         text = pytesseract.image_to_string(binary_image, lang='vie', config=tessdata_dir_config)
-        print("ta heo",text)
         cv2.imwrite(os.path.join(save_path, "frames_{}.jpg".format(currentFrame)), binary_image)
         '''
         lastFrame = FindLastFrame(frames,currentFrame,totalFrame,AreaOfText,ColorOfText)

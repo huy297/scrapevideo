@@ -44,10 +44,6 @@ def Main(filename):
 
     change_to_current_directory()
 
-    """
-    current_directory = os.getcwd()
-    print("Thư mục làm việc hiện tại:", current_directory)
-    """
 
     CountVideo = 5
 
