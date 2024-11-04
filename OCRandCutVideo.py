@@ -48,7 +48,7 @@ def Valid_Group(str1,str2):
     Len = max(len(str1),len(str2))
     return Dis <= 0.35 * Len
 
-
+# Path to tesseract
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe" 
 tessdata_dir_config = '--tessdata-dir "C:\\Program Files\\Tesseract-OCR\\tessdata"'
 

@@ -54,5 +54,6 @@ def Main(filename):
         CountVideo += 1
         download_video(url,SAVE_PATH,CountVideo)
 
+#Pass the directory of file link
 Main(r"C:\Scrape\sub.txt")
 
